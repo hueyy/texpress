@@ -22,7 +22,7 @@ let userInfoCache = {}
 
 const getUserInfo = (api, userID) => new Promise(async (resolve, reject) => {
   if(userInfoCache[userID]){
-    return userInfoCache[userID]
+    return resolve(userInfoCache[userID])
   }
   let userInfo = {}
   try {
@@ -34,23 +34,41 @@ const getUserInfo = (api, userID) => new Promise(async (resolve, reject) => {
   return resolve(userInfo)
 })
 
-const stringifyMessage = async (api, message) => {
+const cacheUniqueUsers = (api, messages) => new Promise(async (resolve, reject) => {
+  const uniqueUsers = _.uniq(messages.map(({ senderID }) => senderID))
+  console.log(uniqueUsers)
+  for(let i = 0; i < uniqueUsers.length; i++){
+    try {
+      await getUserInfo(api, uniqueUsers[i])
+    } catch (error) {
+      return reject(error)
+    }
+  }
+  return resolve()
+})
+
+const stringifyMessage = (api, message) => new Promise(async (resolve, reject) => {
   if(message.type === 'message'){
-    const userInfo = await getUserInfo(api, message.senderID)
+    let userInfo
+    try {
+      userInfo = await getUserInfo(api, message.senderID)
+    } catch (error) {
+      return reject(error)
+    }
     if(message.body.length === 0 && message.attachments.length > 0){
       if(message.attachments[0] && message.attachments[0].type === 'sticker'){
-        return `${userInfo.name}: (sticker) ${message.attachments[0].caption || ''}`
+        return resolve(`${userInfo.name}: (sticker) ${message.attachments[0].caption || ''}`)
       } else if (message.attachments[0] && message.attachments[0].type === 'animated_image'){
-        return `${userInfo.name} sent a gif`
+        return resolve(`${userInfo.name} sent a gif`)
       }
-      return `${userInfo.name} sent an unsupported message`
+      return resolve(`${userInfo.name} sent an unsupported message`)
     }
-    return `${userInfo.name}: ${message.body}`
+    return resolve(`${userInfo.name}: ${message.body}`)
   }
   if(message.type === 'event'){
-    return message.snippet
+    return resolve(message.snippet)
   }
-}
+})
 
 const initMessengerListener = api => {
   api.listen(async (error, newMessage) => {
@@ -75,6 +93,8 @@ const handleSMS = (api) => async (request, response) => {
   }
 
   const message = request.body.message
+
+  console.log('MESSAGE', message)
 
   if(message === ACTIONS.THREADS){
     let list
@@ -113,7 +133,8 @@ const handleSMS = (api) => async (request, response) => {
     try {
       await fcm.promisifiedSend(`✅ Entered thread ${threadIndex}`)
       const msgHistory = await api.getThreadHistory(currentState.currentThreadID, 15)
-      await api.markAsRead(currentState.currentThreadID)
+      // await api.markAsRead(currentState.currentThreadID)
+      await cacheUniqueUsers(api, msgHistory)
       const messagesToSend = msgHistory.map(msg => stringifyMessage(api, msg))
       await fcm.promisifiedSend((await Promise.all(messagesToSend)).join('\n'))
       if(msgHistory.length === 0){

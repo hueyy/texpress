@@ -86,6 +86,7 @@ const init = async () => {
   api.getThreadHistory = undefined
   api.getThreadHistory = (threadID, amount) => new Promise((resolve, reject) => {
     threadHistoryPromisified(threadID, amount, undefined, (error, history) => {
+      console.log(error, history)
       if(error){
         return reject(error)
       }

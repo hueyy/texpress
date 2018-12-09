@@ -5,6 +5,12 @@ const FIREBASE_SERVER_KEY = process.env.FIREBASE_SERVER_KEY
 
 const fcm = new FCM(FIREBASE_SERVER_KEY)
 fcm.promisifiedSend = (msgText) => new Promise((resolve, reject) => {
+  console.log({
+    to: TO_REGISTRATION_TOKEN,
+    data: {
+      content: msgText
+    }
+  })
   fcm.send({
     to: TO_REGISTRATION_TOKEN,
     data: {
